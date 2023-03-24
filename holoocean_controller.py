@@ -3,6 +3,9 @@ import holoocean
 import numpy as np
 from pynput import keyboard
 
+from bruce_slam.CFAR import CFAR
+
+
 from utils import generate_map
 
 pressed_keys = list()
@@ -52,9 +55,10 @@ def parse_keys(keys, val):
 
     return command
 
-config = holoocean.packagemanager.get_scenario("OpenWater-HoveringImagingSonar")
+scene = "test" # OpenWater-HoveringImagingSonar"
+config = holoocean.packagemanager.get_scenario(scene)
 
-with holoocean.make("OpenWater-HoveringImagingSonar") as env:
+with holoocean.make(scene) as env:
     while True:
         if 'q' in pressed_keys:
             break
@@ -64,18 +68,35 @@ with holoocean.make("OpenWater-HoveringImagingSonar") as env:
         env.act("auv0", command)
         state = env.tick()
 
+        if "DepthSensor" in state:
+            print(state["DepthSensor"])
+
         if "HorizontalSonar" in state:
 
             map_x, map_y = generate_map(config)
-
             img = np.array(state["HorizontalSonar"] * 255).astype(np.uint8)
             horizontal_sonar_img = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR)
 
-            img = np.array(state["VerticalSonar"] * 255).astype(np.uint8)
-            vertical_sonar_img = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR)
+
+            detector = CFAR(40, 20, 0.1, None)
+            threshold = 85
+            peaks = detector.detect(img, "SOCA")
+            peaks &= img > threshold
+            peaks_r = cv2.remap(peaks, map_x, map_y, cv2.INTER_LINEAR)
+            locs = np.c_[np.nonzero(peaks_r)]
+
+
+            for loc in locs:
+                cv2.circle(horizontal_sonar_img, (loc[1],loc[0]),5, (255), -1)
+
+
+            #img = np.array(state["VerticalSonar"] * 255).astype(np.uint8)
+            #vertical_sonar_img = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR)
 
             cv2.imshow('Frame',horizontal_sonar_img)
-            cv2.imshow('Frame_2',vertical_sonar_img)
+            #cv2.imshow('Frame_2',vertical_sonar_img)
+
+            cv2.imwrite("test.png",img)
  
             # Press Q on keyboard to  exit
             if cv2.waitKey(25) & 0xFF == ord('q'):
