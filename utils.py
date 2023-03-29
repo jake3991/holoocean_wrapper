@@ -43,3 +43,44 @@ def generate_map(config: dict) -> np.array:
     map_x = np.asarray(f_bearings(b), dtype=np.float32)
 
     return map_x, map_y
+
+
+def parse_keys(keys: list, val : int, depth_command : float) -> np.array:
+    """Handle any pressed keys on the keyboard, converting them into 
+    commands for the ROV. 
+
+    Args:
+        keys (list): list of pressed keys on the keyboard
+        val (int): the force strenght we apply to the command array
+        depth_command (float): the depth we want the ROV at
+
+    Returns:
+        np.array: an array of the commands to be sent to the ROV
+    """
+
+
+    command = np.zeros(8) # the commands start out as all zeros
+    command[0:4] = depth_command # set the depth command
+
+    if 'i' in keys: # up
+        command[0:4] += val
+    if 'k' in keys: # down
+        command[0:4] -= val
+    if 'j' in keys: # rotate left
+        command[[4,7]] += val
+        command[[5,6]] -= val
+    if 'l' in keys: # rotate right 
+        command[[4,7]] -= val
+        command[[5,6]] += val
+    if 'w' in keys: # forward
+        command[4:8] += val
+    if 's' in keys: # backward
+        command[4:8] -= val
+    if 'a' in keys: # strafe left
+        command[[4,6]] += val
+        command[[5,7]] -= val
+    if 'd' in keys: #strafe right
+        command[[4,6]] -= val
+        command[[5,7]] += val
+
+    return command
