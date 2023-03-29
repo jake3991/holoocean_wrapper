@@ -84,3 +84,15 @@ def parse_keys(keys: list, val : int, depth_command : float) -> np.array:
         command[[5,7]] += val
 
     return command
+
+def log_path(path : list) -> None:
+    """Log a generated path from a manual control run
+
+    Args:
+        path (list): list of States
+    """
+
+    arr = path[0].vec
+    for i in range(1,len(path)):
+        arr = np.row_stack((arr,path[i].vec))
+    np.save("paths/path_1.npy",arr)
