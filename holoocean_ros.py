@@ -13,9 +13,7 @@ from sonar_oculus.msg import OculusPing
 
 # import from this package
 from pid import Control
-from utils import generate_map, parse_keys, log_path
-from lqr import LQR
-from state import State
+from utils import parse_keys
 from bruce_slam.CFAR import CFAR
 
 print(holoocean.util.get_holoocean_path())
@@ -46,18 +44,6 @@ depth_command = 0
 ticks_per_second = 200
 step = 0
 
-# some control stuff
-controller = LQR() # get an LQR controller
-u = np.zeros(8) # LQR command object
-path_step = 0 # path step in the path if we are following it
-path = [] # list of States for a path
-
-load_path = True # do we want to load up a apth
-if load_path:
-    temp = np.load("paths/path_1.npy") # load and package the path
-    for row in temp:
-        path.append(State(row))
-
 # init a rosnode
 rospy.init_node("holoocean")
 
@@ -70,39 +56,14 @@ sonar_pub = rospy.Publisher("/sonar_oculus_node/M750d/ping",OculusPing,queue_siz
 with holoocean.make(scene) as env:
     while True:
         if 'q' in pressed_keys:
-            if load_path == False:
-                log_path(path)
             break
         
         # get the command from the keyboard, keeping depth at the same level
         command = parse_keys(pressed_keys, force, depth_command)
 
         # send command and tick the env
-        if load_path == False:
-            env.act("auv0", command)
-        else:
-            env.act("auv0", u)
+        env.act("auv0", command)
         state = env.tick()
-
-        # get the true state location
-        true_state = State(state)
-        
-        # if the path is zero, add the first location to it
-        if len(path) == 0:
-            path.append(true_state)
-
-        # add to the path, to be saved later
-        if load_path == False:
-            if (abs(true_state.vec[0] - path[-1].vec[0]) >= 3 or 
-                abs(true_state.vec[1] - path[-1].vec[1]) >= 3 or
-                abs(true_state.vec[8] - path[-1].vec[8]) >= 5):
-                path.append(true_state)
-        else: # update LQR and check if we need to step the path
-            u = controller.u(true_state, path[path_step])
-            if (abs(true_state.vec[0] - path[path_step].vec[0]) <= 0.5 and 
-                abs(true_state.vec[1] - path[path_step].vec[1]) <= 0.5  and
-                abs(true_state.vec[8] - path[path_step].vec[8]) <= 2.0):
-                path_step += 1
 
         # update the timestamp based on the number of ticks
         stamp = rospy.Time.from_sec(step / 200) 
@@ -124,7 +85,7 @@ with holoocean.make(scene) as env:
         if "PoseSensor" in state:
             # convert the pose sensor to an IMU message
             r,p,y = Rotation.from_matrix(state["PoseSensor"][:3, :3]).as_euler("xyz")
-            x,y,z,w = Rotation.from_euler("xyz",[r-(np.pi/2),p,-y]).as_quat()
+            x,y,z,w = Rotation.from_euler("xyz",[r+(np.pi/2),p,-y]).as_quat()
             imu_msg = Imu()
             imu_msg.orientation.x = x
             imu_msg.orientation.y = y

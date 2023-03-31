@@ -1,13 +1,18 @@
 import cv2
+import rospy
 import holoocean
 import numpy as np
 from pynput import keyboard
 
+import matplotlib.pyplot as plt
+
+from pid import Control
+from utils import generate_map, parse_keys
 from bruce_slam.CFAR import CFAR
 
+print(holoocean.util.get_holoocean_path())
 
-from utils import generate_map
-
+depth_control = Control()
 pressed_keys = list()
 force = 25
 
@@ -28,56 +33,45 @@ listener = keyboard.Listener(
 listener.start()
 
 
-def parse_keys(keys, val):
-    command = np.zeros(8)
-
-    if 'i' in keys: # up
-        command[0:4] += val
-    if 'k' in keys: # down
-        command[0:4] -= val
-    if 'j' in keys: # rotate left
-        command[[4,7]] += val
-        command[[5,6]] -= val
-    if 'l' in keys: # rotate right 
-        command[[4,7]] -= val
-        command[[5,6]] += val
-
-    if 'w' in keys: # forward
-        command[4:8] += val
-    if 's' in keys: # backward
-        command[4:8] -= val
-    if 'a' in keys: # strafe left
-        command[[4,6]] += val
-        command[[5,7]] -= val
-    if 'd' in keys: #strafe right
-        command[[4,6]] -= val
-        command[[5,7]] += val
-
-    return command
-
 scene = "test" # OpenWater-HoveringImagingSonar"
 config = holoocean.packagemanager.get_scenario(scene)
+depth_command = 0
+
+plt.ion()
+step = 0
+xs = []
+ys = []
 
 with holoocean.make(scene) as env:
     while True:
         if 'q' in pressed_keys:
             break
-        command = parse_keys(pressed_keys, force)
+        command = parse_keys(pressed_keys, force, depth_command)
 
         #send to holoocean
         env.act("auv0", command)
         state = env.tick()
 
-        if "DepthSensor" in state:
-            print(state["DepthSensor"])
+        if "VelocitySensor" in state:
+            '''xs.append(step)
+            ys.append(state["VelocitySensor"][0])
+            step += 1
+            plt.plot(xs,ys)
+            plt.draw()
+            plt.pause(0.0001)
+            plt.clf()
+            plt.ylim(1,-1)'''
+            pass
+            
 
+        if "PoseSensor" in state:
+            depth_command = depth_control.control_depth(state["PoseSensor"][2][3],-1)
+            
         if "HorizontalSonar" in state:
 
             map_x, map_y = generate_map(config)
             img = np.array(state["HorizontalSonar"] * 255).astype(np.uint8)
             horizontal_sonar_img = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR)
-
-
             detector = CFAR(40, 20, 0.1, None)
             threshold = 85
             peaks = detector.detect(img, "SOCA")
@@ -93,10 +87,10 @@ with holoocean.make(scene) as env:
             #img = np.array(state["VerticalSonar"] * 255).astype(np.uint8)
             #vertical_sonar_img = cv2.remap(img, map_x, map_y, cv2.INTER_LINEAR)
 
-            cv2.imshow('Frame',horizontal_sonar_img)
+            #cv2.imshow('Frame',horizontal_sonar_img)
             #cv2.imshow('Frame_2',vertical_sonar_img)
 
-            cv2.imwrite("test.png",img)
+            #cv2.imwrite("test.png",img)
  
             # Press Q on keyboard to  exit
             if cv2.waitKey(25) & 0xFF == ord('q'):
